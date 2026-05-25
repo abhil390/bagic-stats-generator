@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>BAGIC Daily Stats Generator</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0F1117; --surface: #161B27; --border: #1E2A3A;
+    --text: #E2E8F0; --muted: #64748B; --dim: #475569;
+    --accent: #4F8EF7; --green: #22C55E; --red: #EF4444; --radius: 12px;
+  }
+  body { background:var(--bg); color:var(--text); font-family:'DM Sans',sans-serif; min-height:100vh; display:flex; flex-direction:column; align-items:center; padding:48px 20px 60px; }
+  .header { text-align:center; margin-bottom:40px; }
+  .badge { display:inline-block; background:rgba(79,142,247,.12); border:1px solid rgba(79,142,247,.3); color:var(--accent); font-family:'DM Mono',monospace; font-size:10px; letter-spacing:3px; text-transform:uppercase; padding:5px 14px; border-radius:20px; margin-bottom:14px; }
+  h1 { font-size:26px; font-weight:700; color:#F8FAFC; letter-spacing:-.5px; margin-bottom:6px; }
+  .sub { font-size:13px; color:var(--muted); font-family:'DM Mono',monospace; }
+  .card { background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:32px; width:100%; max-width:580px; margin-bottom:20px; box-shadow:0 8px 40px rgba(0,0,0,.5); }
+  .section-label { font-family:'DM Mono',monospace; font-size:10px; letter-spacing:2.5px; text-transform:uppercase; color:var(--dim); margin-bottom:18px; }
+  .upload-zone { border:1.5px dashed var(--border); border-radius:var(--radius); padding:32px 20px; text-align:center; cursor:pointer; transition:border-color .2s,background .2s; }
+  .upload-zone:hover,.upload-zone.drag { border-color:var(--accent); background:rgba(79,142,247,.04); }
+  .upload-icon { font-size:32px; margin-bottom:10px; }
+  .upload-title { font-size:14px; color:#94A3B8; margin-bottom:4px; }
+  .upload-hint { font-size:11px; color:var(--dim); font-family:'DM Mono',monospace; }
+  .file-chip { display:inline-flex; align-items:center; gap:8px; background:rgba(79,142,247,.1); border:1px solid rgba(79,142,247,.25); border-radius:8px; padding:6px 14px; font-size:12px; color:var(--accent); font-family:'DM Mono',monospace; margin-top:14px; word-break:break-all; }
+  #fileInput { display:none; }
+  .field-row { display:flex; align-items:center; gap:14px; margin-top:20px; }
+  .field-label { font-size:12px; color:#94A3B8; width:110px; flex-shrink:0; font-family:'DM Mono',monospace; }
+  input[type="date"] { flex:1; background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:9px 14px; color:var(--text); font-size:14px; font-family:'DM Mono',monospace; outline:none; color-scheme:dark; transition:border-color .2s; }
+  input[type="date"]:focus { border-color:var(--accent); }
+  .divider { height:1px; background:var(--border); margin:24px 0; }
+  /* stat chips */
+  .stats-grid { display:flex; gap:10px; margin-bottom:12px; }
+  .stat-chip { flex:1; background:var(--bg); border:1px solid var(--border); border-radius:10px; padding:14px 10px; text-align:center; }
+  .stat-chip.green { border-color:rgba(34,197,94,.2); }
+  .stat-chip.red   { border-color:rgba(239,68,68,.2); }
+  .stat-val { font-size:22px; font-weight:700; display:block; color:#F1F5F9; font-family:'DM Sans',sans-serif; }
+  .stat-val.green { color:var(--green); }
+  .stat-val.red   { color:var(--red); }
+  .stat-pct { font-size:12px; font-weight:400; color:#94A3B8; }
+  .stat-key { font-size:9.5px; color:var(--dim); letter-spacing:1.5px; text-transform:uppercase; margin-top:4px; display:block; font-family:'DM Mono',monospace; }
+  /* preview */
+  .preview-label { font-family:'DM Mono',monospace; font-size:10px; letter-spacing:2.5px; text-transform:uppercase; color:var(--dim); margin-bottom:14px; }
+  .preview-box { background:var(--bg); border:1px solid var(--border); border-radius:10px; padding:20px; font-family:'DM Mono',monospace; font-size:13px; line-height:2; color:#CBD5E1; white-space:pre-wrap; word-break:break-word; min-height:120px; }
+  .preview-box b { color:#F1F5F9; font-weight:700; }
+  /* buttons */
+  .btn { display:block; width:100%; padding:14px; border-radius:10px; border:none; font-family:'DM Sans',sans-serif; font-size:14px; font-weight:600; cursor:pointer; transition:opacity .2s,transform .1s; margin-top:14px; letter-spacing:.3px; }
+  .btn:hover { opacity:.85; }
+  .btn:active { transform:scale(.98); }
+  .btn-primary { background:var(--accent); color:#fff; }
+  .btn-secondary { background:transparent; border:1px solid var(--border); color:#94A3B8; }
+  /* slot section inside card */
+  .slot-section { margin-top:0; }
+  .slot-block { margin-bottom:16px; }
+  .slot-block:last-of-type { margin-bottom:0; }
+  .slot-header { display:flex; align-items:center; gap:10px; margin-bottom:10px; }
+  .slot-label { font-family:'DM Mono',monospace; font-size:10px; letter-spacing:2px; text-transform:uppercase; color:var(--dim); }
+  .slot-header::after { content:''; flex:1; height:1px; background:var(--border); }
+  .slot-grid { display:flex; gap:8px; }
+  .slot-chip { flex:1; background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:10px 8px; text-align:center; }
+  .slot-chip.green { border-color:rgba(34,197,94,.2); }
+  .slot-chip.red   { border-color:rgba(239,68,68,.2); }
+  .slot-val { font-size:17px; font-weight:700; display:block; color:#F1F5F9; font-family:'DM Sans',sans-serif; }
+  .slot-val.green { color:var(--green); }
+  .slot-val.red   { color:var(--red); }
+  .slot-pct { font-size:11px; font-weight:400; color:#94A3B8; }
+  .slot-key { font-size:9px; color:var(--dim); letter-spacing:1px; text-transform:uppercase; margin-top:3px; display:block; font-family:'DM Mono',monospace; }
+  .biz-tag { display:inline-block; background:rgba(79,142,247,.1); border:1px solid rgba(79,142,247,.2); color:var(--accent); font-size:9px; letter-spacing:1.5px; text-transform:uppercase; padding:2px 8px; border-radius:6px; font-family:'DM Mono',monospace; margin-left:6px; }
+  .nonbiz-tag { display:inline-block; background:rgba(100,116,139,.1); border:1px solid rgba(100,116,139,.2); color:#94A3B8; font-size:9px; letter-spacing:1.5px; text-transform:uppercase; padding:2px 8px; border-radius:6px; font-family:'DM Mono',monospace; margin-left:6px; }
+  /* details card */
+  .details-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:18px; }
+  .red-badge { display:inline-flex; align-items:center; gap:7px; background:rgba(239,68,68,.1); border:1px solid rgba(239,68,68,.25); color:var(--red); font-family:'DM Mono',monospace; font-size:10px; letter-spacing:2px; text-transform:uppercase; padding:4px 12px; border-radius:20px; }
+  .case-count-badge { background:rgba(239,68,68,.15); color:var(--red); font-family:'DM Mono',monospace; font-size:11px; padding:3px 10px; border-radius:12px; font-weight:600; }
+  .details-table { width:100%; border-collapse:collapse; font-size:12px; }
+  .details-table th { text-align:left; padding:8px 12px; font-family:'DM Mono',monospace; font-size:9.5px; letter-spacing:1.5px; text-transform:uppercase; color:var(--dim); border-bottom:1px solid var(--border); white-space:nowrap; }
+  .details-table td { padding:11px 12px; border-bottom:1px solid rgba(30,42,58,.6); color:#94A3B8; vertical-align:top; line-height:1.5; }
+  .details-table tr:last-child td { border-bottom:none; }
+  .details-table tr:hover td { background:rgba(79,142,247,.04); }
+  .ref-num { color:var(--accent); font-family:'DM Mono',monospace; font-size:11px; }
+  .agent-name { color:#CBD5E1; }
+  .time-pill { display:inline-block; background:rgba(239,68,68,.12); border:1px solid rgba(239,68,68,.2); color:var(--red); font-family:'DM Mono',monospace; font-size:11px; padding:2px 9px; border-radius:8px; white-space:nowrap; }
+  .no-cases { text-align:center; padding:32px 0; color:var(--dim); font-size:13px; font-family:'DM Mono',monospace; }
+  /* toast */
+  #toast { position:fixed; bottom:32px; left:50%; transform:translateX(-50%) translateY(20px); background:#1E2A3A; border:1px solid var(--accent); color:var(--accent); font-family:'DM Mono',monospace; font-size:12px; padding:10px 24px; border-radius:30px; opacity:0; transition:opacity .3s,transform .3s; pointer-events:none; white-space:nowrap; }
+  #toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+  .error { color:var(--red); font-size:12px; margin-top:10px; text-align:center; font-family:'DM Mono',monospace; }
+
+  .btn-download { background: #1E293B; border: 1px solid #334155; color: #94A3B8; }
+  .btn-download:hover { border-color: var(--accent); color: var(--accent); opacity: 1; }
+  .download-row { display: flex; gap: 10px; margin-top: 14px; }
+  .download-row .btn { margin-top: 0; flex: 1; font-size: 13px; padding: 12px 10px; }
+  .capturing .btn, .capturing .btn-secondary { display: none; }
+  .capturing { box-shadow: none !important; }
+  .hidden { display:none !important; }
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+</head>
+<body>
+
+<div class="header">
+  <div class="badge">BAGIC &middot; DA Analytics</div>
+  <h1>Daily Stats Generator</h1>
+  <p class="sub">Upload CSV &rarr; instant Slack messages</p>
+</div>
+
+<!-- Upload card -->
+<div class="card">
+  <div class="section-label">01 &mdash; Upload CSV File</div>
+  <div class="upload-zone" id="dropZone">
+    <div class="upload-icon">&#128194;</div>
+    <p class="upload-title">Drop your CSV here, or click to browse</p>
+    <p class="upload-hint">BAGIC HIL filtered export (.csv)</p>
+    <div id="fileChip" class="file-chip hidden">&#128196; <span id="fileName"></span></div>
+  </div>
+  <input type="file" id="fileInput" accept=".csv" />
+  <div id="uploadError" class="error hidden"></div>
+  <div class="field-row">
+    <span class="field-label">Report Date</span>
+    <input type="date" id="dateInput" />
+  </div>
+</div>
+
+<!-- Message 1: Daily Stats -->
+<div class="card hidden" id="resultsCard">
+  <div class="section-label">02 &mdash; Daily Stats &mdash; Slack Message 1</div>
+  <div class="stats-grid">
+    <div class="stat-chip"><span class="stat-val" id="sTotal">0</span><span class="stat-key">Total Cases</span></div>
+    <div class="stat-chip"><span class="stat-val" id="sBot">0 <span class="stat-pct" id="sBotPct"></span></span><span class="stat-key">DA Bot</span></div>
+    <div class="stat-chip"><span class="stat-val" id="sDA">0 <span class="stat-pct" id="sDAPCT"></span></span><span class="stat-key">DA Handled</span></div>
+  </div>
+  <div class="stats-grid">
+    <div class="stat-chip green"><span class="stat-val green" id="sUnder">0 <span class="stat-pct" id="sUnderPct"></span></span><span class="stat-key">Under 10 mins</span></div>
+    <div class="stat-chip red"><span class="stat-val red" id="sAbove">0 <span class="stat-pct" id="sAbovePct"></span></span><span class="stat-key">Above 10 mins</span></div>
+  </div>
+  <div class="divider"></div>
+  <div class="preview-label">Slack Message Preview</div>
+  <div class="preview-box" id="preview"></div>
+  <button class="btn btn-primary" id="copyBtn">&#128203; Copy to Clipboard</button>
+  <div class="download-row">
+    <button class="btn btn-download" id="dlMsg1">&#128247; Download as Image</button>
+  </div>
+  <button class="btn btn-secondary" id="resetBtn">&#8617; Reset &amp; Upload New File</button>
+</div>
+
+<!-- Message 2: Shift-wise Stats -->
+<div class="card hidden" id="slotCard">
+  <div class="section-label">03 &mdash; Shift-wise Stats &mdash; Slack Message 2</div>
+
+  <!-- summary chips -->
+  <div class="stats-grid">
+    <div class="stat-chip"><span class="stat-val" id="sl_total">0</span><span class="stat-key">Total Cases</span></div>
+    <div class="stat-chip"><span class="stat-val" id="sl_bot">0 <span class="stat-pct" id="sl_botPct"></span></span><span class="stat-key">DA Bot</span></div>
+    <div class="stat-chip"><span class="stat-val" id="sl_da">0 <span class="stat-pct" id="sl_daPct"></span></span><span class="stat-key">DA Handled</span></div>
+  </div>
+
+  <div class="divider"></div>
+  <div class="slot-section">
+
+    <!-- 12AM-8AM -->
+    <div class="slot-block">
+      <div class="slot-header">
+        <span class="slot-label">&#127769; 12:00 AM &mdash; 8:00 AM</span>
+        <span class="nonbiz-tag">Non-Business</span>
+      </div>
+      <div class="slot-grid">
+        <div class="slot-chip"><span class="slot-val" id="s1Total">0</span><span class="slot-key">Received</span></div>
+        <div class="slot-chip green"><span class="slot-val green" id="s1Under">0 <span class="slot-pct" id="s1UnderPct"></span></span><span class="slot-key">Under 10 mins</span></div>
+        <div class="slot-chip red"><span class="slot-val red" id="s1Above">0 <span class="slot-pct" id="s1AbovePct"></span></span><span class="slot-key">Above 10 mins</span></div>
+      </div>
+    </div>
+
+    <!-- 8AM-8PM -->
+    <div class="slot-block">
+      <div class="slot-header">
+        <span class="slot-label">&#9728;&#65039; 8:00 AM &mdash; 8:00 PM</span>
+        <span class="biz-tag">Business Hours</span>
+      </div>
+      <div class="slot-grid">
+        <div class="slot-chip"><span class="slot-val" id="s2Total">0</span><span class="slot-key">Received</span></div>
+        <div class="slot-chip green"><span class="slot-val green" id="s2Under">0 <span class="slot-pct" id="s2UnderPct"></span></span><span class="slot-key">Under 10 mins</span></div>
+        <div class="slot-chip red"><span class="slot-val red" id="s2Above">0 <span class="slot-pct" id="s2AbovePct"></span></span><span class="slot-key">Above 10 mins</span></div>
+      </div>
+    </div>
+
+    <!-- 8PM-12AM -->
+    <div class="slot-block">
+      <div class="slot-header">
+        <span class="slot-label">&#127771; 8:00 PM &mdash; 12:00 AM</span>
+        <span class="nonbiz-tag">Non-Business</span>
+      </div>
+      <div class="slot-grid">
+        <div class="slot-chip"><span class="slot-val" id="s3Total">0</span><span class="slot-key">Received</span></div>
+        <div class="slot-chip green"><span class="slot-val green" id="s3Under">0 <span class="slot-pct" id="s3UnderPct"></span></span><span class="slot-key">Under 10 mins</span></div>
+        <div class="slot-chip red"><span class="slot-val red" id="s3Above">0 <span class="slot-pct" id="s3AbovePct"></span></span><span class="slot-key">Above 10 mins</span></div>
+      </div>
+    </div>
+
+  </div>
+  <div class="divider"></div>
+  <div class="preview-label">Slack Message Preview</div>
+  <div class="preview-box" id="slotPreview"></div>
+  <button class="btn btn-primary" id="slotCopyBtn">&#128203; Copy to Clipboard</button>
+  <div class="download-row">
+    <button class="btn btn-download" id="dlMsg2">&#128247; Download as Image</button>
+  </div>
+</div>
+
+<!-- Above 10 mins case details -->
+<div class="card hidden" id="detailsCard">
+  <div class="details-header">
+    <div class="red-badge">&#128308; Above 10 mins &mdash; Case Details</div>
+    <span class="case-count-badge" id="detailsCount">0 cases</span>
+  </div>
+  <div id="detailsTableWrap"></div>
+</div>
+
+<div id="toast">&#10003; Copied! Paste it into Slack.</div>
+
+<script>
+  var dropZone    = document.getElementById('dropZone');
+  var fileInput   = document.getElementById('fileInput');
+  var fileChip    = document.getElementById('fileChip');
+  var fileNameEl  = document.getElementById('fileName');
+  var uploadError = document.getElementById('uploadError');
+  var dateInput   = document.getElementById('dateInput');
+  var resultsCard = document.getElementById('resultsCard');
+  var slotCard    = document.getElementById('slotCard');
+  var detailsCard = document.getElementById('detailsCard');
+  var detailsCount= document.getElementById('detailsCount');
+  var detailsWrap = document.getElementById('detailsTableWrap');
+  var toast       = document.getElementById('toast');
+  var currentStats= null;
+  var currentRows = null;
+
+  dropZone.addEventListener('click', function() { fileInput.click(); });
+  dropZone.addEventListener('dragover', function(e) { e.preventDefault(); dropZone.classList.add('drag'); });
+  dropZone.addEventListener('dragleave', function() { dropZone.classList.remove('drag'); });
+  dropZone.addEventListener('drop', function(e) { e.preventDefault(); dropZone.classList.remove('drag'); handleFile(e.dataTransfer.files[0]); });
+  fileInput.addEventListener('change', function(e) { handleFile(e.target.files[0]); });
+  dateInput.addEventListener('change', function() { if (currentStats && currentRows) { renderAll(); } });
+
+  function handleFile(file) {
+    if (!file) return;
+    if (!file.name.endsWith('.csv')) { showError('Please upload a .csv file.'); return; }
+    hideError();
+    fileNameEl.textContent = file.name;
+    fileChip.classList.remove('hidden');
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      try {
+        var rows = parseCSV(e.target.result);
+        currentRows = rows;
+        var dateFromData = detectDateFromRows(rows);
+        if (dateFromData) { dateInput.value = dateFromData; }
+        currentStats = computeStats(rows);
+        renderAll();
+      } catch(err) { showError('Could not parse CSV: ' + err.message); }
+    };
+    reader.readAsText(file);
+  }
+
+  function parseCSV(text) {
+    var lines = text.trim().split('\n');
+    if (lines.length < 2) throw new Error('File appears empty.');
+    var headers = splitLine(lines[0]).map(function(h) { return h.trim().replace(/"/g, ''); });
+    return lines.slice(1).map(function(line) {
+      var cols = splitLine(line);
+      var obj = {};
+      headers.forEach(function(h, i) { obj[h] = (cols[i] || '').trim().replace(/"/g, ''); });
+      return obj;
+    });
+  }
+
+  function splitLine(line) {
+    var cols = [], cur = '', inQ = false;
+    for (var i = 0; i < line.length; i++) {
+      var c = line[i];
+      if (c === '"') { inQ = !inQ; }
+      else if (c === ',' && !inQ) { cols.push(cur); cur = ''; }
+      else cur += c;
+    }
+    cols.push(cur);
+    return cols;
+  }
+
+  function detectDateFromRows(rows) {
+    for (var i = 0; i < rows.length; i++) {
+      var d = rows[i]['hil_init_date'] || '';
+      var m = d.match(/(\d{4}-\d{2}-\d{2})/);
+      if (m) return m[1];
+    }
+    return '';
+  }
+
+  function dateDiffMin(a, b) {
+    if (!a || !b) return NaN;
+    var da = new Date(a.trim()), db = new Date(b.trim());
+    if (isNaN(da) || isNaN(db)) return NaN;
+    return (db - da) / 60000;
+  }
+
+  function getHour(row) {
+    var d = row['hil_init_date'] || '';
+    if (!d) return -1;
+    return new Date(d.trim()).getHours();
+  }
+
+  function slotStats(daRows, hMin, hMax) {
+    var filtered = daRows.filter(function(r) { var h = getHour(r); return h >= hMin && h < hMax; });
+    var received = filtered.length;
+    var under = filtered.filter(function(r) { var v = dateDiffMin(r['hil_init_date'], r['hil_completed_date']); return !isNaN(v) && v < 10; }).length;
+    var above = filtered.filter(function(r) { var v = dateDiffMin(r['hil_init_date'], r['hil_completed_date']); return !isNaN(v) && v >= 10; }).length;
+    var pct = function(n) { return received > 0 ? ((n/received)*100).toFixed(1) : '0.0'; };
+    return { received: received, under: under, above: above, underPct: pct(under), abovePct: pct(above) };
+  }
+
+  function computeStats(rows) {
+    var total = rows.length;
+    var bot = rows.filter(function(r) { return r['HIL_TAT_SLA'] === 'DA Bot'; }).length;
+    var daRows = rows.filter(function(r) { return r['HIL_TAT_SLA'] !== 'DA Bot'; });
+    var daTotal = daRows.length;
+    var under10 = daRows.filter(function(r) { var v = dateDiffMin(r['hil_init_date'], r['hil_completed_date']); return !isNaN(v) && v < 10; }).length;
+    var above10Rows = daRows.filter(function(r) { var v = dateDiffMin(r['hil_init_date'], r['hil_completed_date']); return !isNaN(v) && v >= 10; }).map(function(r) {
+      var mins = dateDiffMin(r['hil_init_date'], r['hil_completed_date']);
+      var mm = Math.floor(mins), ss = Math.round((mins - mm) * 60);
+      r['_calc_display'] = mm + 'm ' + (ss < 10 ? '0' : '') + ss + 's';
+      r['_hour'] = getHour(r);
+      return r;
+    });
+    var above10 = above10Rows.length;
+    var pct = function(n) { return daTotal > 0 ? ((n/daTotal)*100).toFixed(1) : '0.0'; };
+    var tpct = function(n) { return total > 0 ? ((n/total)*100).toFixed(1) : '0.0'; };
+    var botPct = tpct(bot); var daPct = tpct(daTotal);
+    var s1 = slotStats(daRows, 0, 8);
+    var s2 = slotStats(daRows, 8, 20);
+    var s3 = slotStats(daRows, 20, 24);
+    return { total:total, bot:bot, daTotal:daTotal, botPct:botPct, daPct:daPct, under10:under10, above10:above10, above10Rows:above10Rows, under10Pct:pct(under10), above10Pct:pct(above10), s1:s1, s2:s2, s3:s3 };
+  }
+
+  function formatDateLabel(val) {
+    if (!val) return '';
+    var p = val.split('-');
+    var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    return parseInt(p[2]) + ' ' + months[parseInt(p[1])-1] + ' ' + p[0];
+  }
+
+
+  function getDayLabel(val) {
+    if (!val) return '';
+    var d = new Date(val + 'T00:00:00');
+    var day = d.getDay(); // 0=Sun, 6=Sat
+    if (day === 0) return ' (Sunday)';
+    if (day === 6) return ' (Saturday)';
+    return '';
+  }
+
+  var LH = '&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;&#9473;';
+  var LP = '\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501';
+
+  function renderAll() {
+    var s = currentStats;
+    var d = formatDateLabel(dateInput.value) || '-';
+
+    // --- Card 1 chips ---
+    document.getElementById('sTotal').firstChild.textContent = s.total;
+    document.getElementById('sBot').firstChild.textContent   = s.bot + ' ';
+    document.getElementById('sBotPct').textContent = '(' + s.botPct + '%)';
+    document.getElementById('sDA').firstChild.textContent    = s.daTotal + ' ';
+    document.getElementById('sDAPCT').textContent = '(' + s.daPct + '%)'
+    document.getElementById('sUnder').firstChild.textContent = s.under10 + ' ';
+    document.getElementById('sUnderPct').textContent = '(' + s.under10Pct + '%)';
+    document.getElementById('sAbove').firstChild.textContent = s.above10 + ' ';
+    document.getElementById('sAbovePct').textContent = '(' + s.above10Pct + '%)';
+    document.getElementById('preview').innerHTML = buildMsg1HTML(s, d);
+    resultsCard.classList.remove('hidden');
+
+    // --- Card 2 chips ---
+    document.getElementById('sl_total').firstChild.textContent = s.total;
+    document.getElementById('sl_bot').firstChild.textContent   = s.bot + ' ';
+    document.getElementById('sl_botPct').textContent = '(' + s.botPct + '%)';
+    document.getElementById('sl_da').firstChild.textContent    = s.daTotal + ' ';
+    document.getElementById('sl_daPct').textContent = '(' + s.daPct + '%)'
+
+    function setSlot(prefix, sl) {
+      document.getElementById(prefix + 'Total').firstChild.textContent = sl.received;
+      document.getElementById(prefix + 'Under').firstChild.textContent = sl.under + ' ';
+      document.getElementById(prefix + 'UnderPct').textContent = '(' + sl.underPct + '%)';
+      document.getElementById(prefix + 'Above').firstChild.textContent = sl.above + ' ';
+      document.getElementById(prefix + 'AbovePct').textContent = '(' + sl.abovePct + '%)';
+    }
+    setSlot('s1', s.s1);
+    setSlot('s2', s.s2);
+    setSlot('s3', s.s3);
+    document.getElementById('slotPreview').innerHTML = buildMsg2HTML(s, d);
+    slotCard.classList.remove('hidden');
+
+    renderDetails(s.above10Rows);
+    resultsCard.scrollIntoView({ behavior:'smooth', block:'start' });
+  }
+
+  function buildMsg1HTML(s, d) {
+    return [
+      '&#128202; <b>BAGIC Daily Stats &mdash; ' + d + getDayLabel(dateInput.value) + '</b>',
+      LH, '',
+      '<b>Total Cases Received:</b> ' + s.total,
+      '<b>Handled by DA Bot:</b> ' + s.bot + ' (<b>' + s.botPct + '%</b>)',
+      '<b>Handled by DA:</b> ' + s.daTotal + ' (<b>' + s.daPct + '%</b>)',
+      '', LH,
+      '&#9201;&#65039; <b>DA Handling TAT Breakdown</b>', '',
+      '&#9989; <b>Under 10 mins:</b> ' + s.under10 + ' cases &mdash; <b>' + s.under10Pct + '%</b>',
+      '&#128308; <b>Above 10 mins:</b>   ' + s.above10 + ' cases &mdash; <b>' + s.above10Pct + '%</b>'
+    ].join('\n');
+  }
+
+  function buildMsg1Plain(s) {
+    var d = formatDateLabel(dateInput.value) || '-';
+    return [
+      '\uD83D\uDCCA BAGIC Daily Stats \u2014 ' + d + getDayLabel(dateInput.value),
+      LP, '',
+      'Total Cases Received: ' + s.total,
+      'Handled by DA Bot: ' + s.bot + ' (' + s.botPct + '%)',
+      'Handled by DA: ' + s.daTotal + ' (' + s.daPct + '%)',
+      '', LP,
+      '\u23F1\uFE0F DA Handling TAT Breakdown', '',
+      '\u2705 Under 10 mins: ' + s.under10 + ' cases \u2014 ' + s.under10Pct + '%',
+      '\uD83D\uDD34 Above 10 mins:   ' + s.above10 + ' cases \u2014 ' + s.above10Pct + '%'
+    ].join('\n');
+  }
+
+  function buildMsg2HTML(s, d) {
+    var s1 = s.s1, s2 = s.s2, s3 = s.s3;
+    return [
+      '&#128202; <b>BAGIC Daily Stats &mdash; ' + d + getDayLabel(dateInput.value) + '</b>',
+      LH, '',
+      '<b>Total Cases Received:</b> ' + s.total,
+      '<b>Handled by DA Bot:</b> ' + s.bot + ' (<b>' + s.botPct + '%</b>)',
+      '<b>Handled by DA:</b> ' + s.daTotal + ' (<b>' + s.daPct + '%</b>)',
+      '', LH,
+      '&#127769; <b>12:00 AM &mdash; 8:00 AM</b>',
+      'Received: <b>' + s1.received + '</b> &nbsp;|&nbsp; &#9989; Under 10 mins: <b>' + s1.under + '</b> (<b>' + s1.underPct + '%</b>) &nbsp;|&nbsp; &#128308; Above 10 mins: <b>' + s1.above + '</b> (<b>' + s1.abovePct + '%</b>)',
+      '',
+      '&#9728;&#65039; <b>8:00 AM &mdash; 8:00 PM</b>',
+      'Received: <b>' + s2.received + '</b> &nbsp;|&nbsp; &#9989; Under 10 mins: <b>' + s2.under + '</b> (<b>' + s2.underPct + '%</b>) &nbsp;|&nbsp; &#128308; Above 10 mins: <b>' + s2.above + '</b> (<b>' + s2.abovePct + '%</b>)',
+      '',
+      '&#127771; <b>8:00 PM &mdash; 12:00 AM</b>',
+      'Received: <b>' + s3.received + '</b> &nbsp;|&nbsp; &#9989; Under 10 mins: <b>' + s3.under + '</b> (<b>' + s3.underPct + '%</b>) &nbsp;|&nbsp; &#128308; Above 10 mins: <b>' + s3.above + '</b> (<b>' + s3.abovePct + '%</b>)'
+    ].join('\n');
+  }
+
+  function buildMsg2Plain(s) {
+    var d = formatDateLabel(dateInput.value) || '-';
+    var s1 = s.s1, s2 = s.s2, s3 = s.s3;
+    return [
+      '\uD83D\uDCCA BAGIC Daily Stats \u2014 ' + d + getDayLabel(dateInput.value),
+      LP, '',
+      'Total Cases Received: ' + s.total,
+      'Handled by DA Bot: ' + s.bot + ' (' + s.botPct + '%)',
+      'Handled by DA: ' + s.daTotal + ' (' + s.daPct + '%)',
+      '', LP,
+      '\uD83C\uDF19 12:00 AM \u2014 8:00 AM',
+      'Received: ' + s1.received + '  |  \u2705 Under 10 mins: ' + s1.under + ' (' + s1.underPct + '%)  |  \uD83D\uDD34 Above 10 mins: ' + s1.above + ' (' + s1.abovePct + '%)',
+      '',
+      '\u2600\uFE0F 8:00 AM \u2014 8:00 PM',
+      'Received: ' + s2.received + '  |  \u2705 Under 10 mins: ' + s2.under + ' (' + s2.underPct + '%)  |  \uD83D\uDD34 Above 10 mins: ' + s2.above + ' (' + s2.abovePct + '%)',
+      '',
+      '\uD83C\uDF1B 8:00 PM \u2014 12:00 AM',
+      'Received: ' + s3.received + '  |  \u2705 Under 10 mins: ' + s3.under + ' (' + s3.underPct + '%)  |  \uD83D\uDD34 Above 10 mins: ' + s3.above + ' (' + s3.abovePct + '%)'
+    ].join('\n');
+  }
+
+  function renderDetails(rows) {
+    var count = rows.length;
+    detailsCount.textContent = count + (count === 1 ? ' case' : ' cases');
+    if (count === 0) {
+      detailsWrap.innerHTML = '<div class="no-cases">&#127881; No cases breached the 10-min mark today!</div>';
+    } else {
+      var html = '<table class="details-table"><thead><tr><th>Ref Number</th><th>Agent</th><th>Shift</th><th>Init Date</th><th>Started</th><th>Completed</th><th>TAT</th></tr></thead><tbody>';
+      rows.forEach(function(r) {
+        var agent = (r['hil_by'] || '').split('@')[0].replace(/\./g, ' ').replace(/(?:^|\s)\S/g, function(c) { return c.toUpperCase(); });
+        var h = r['_hour'];
+        var shift = h >= 8 && h < 20 ? '\u2600\uFE0F Business' : (h < 8 ? '\uD83C\uDF19 Non-Biz' : '\uD83C\uDF1B Non-Biz');
+        var initDate  = (r['hil_init_date']      || '').substring(0,16);
+        var started   = (r['hil_started_date']   || '').substring(0,16);
+        var completed = (r['hil_completed_date'] || '').substring(0,16);
+        var procTime  = r['_calc_display'] || '-';
+        html += '<tr>' +
+          '<td><span class="ref-num">' + (r['ref_num']||'-') + '</span></td>' +
+          '<td><span class="agent-name">' + agent + '</span></td>' +
+          '<td>' + shift + '</td>' +
+          '<td>' + initDate + '</td>' +
+          '<td>' + started + '</td>' +
+          '<td>' + completed + '</td>' +
+          '<td><span class="time-pill">' + procTime + '</span></td>' +
+          '</tr>';
+      });
+      html += '</tbody></table>';
+      detailsWrap.innerHTML = html;
+    }
+    detailsCard.classList.remove('hidden');
+  }
+
+  document.getElementById('copyBtn').addEventListener('click', function() {
+    if (!currentStats) return;
+    doCopy(buildMsg1Plain(currentStats));
+  });
+
+  document.getElementById('slotCopyBtn').addEventListener('click', function() {
+    if (!currentStats) return;
+    doCopy(buildMsg2Plain(currentStats));
+  });
+
+  function doCopy(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(showToast).catch(function() { fallbackCopy(text); });
+    } else { fallbackCopy(text); }
+  }
+
+  function fallbackCopy(text) {
+    var ta = document.createElement('textarea');
+    ta.value = text; ta.style.position='fixed'; ta.style.opacity='0';
+    document.body.appendChild(ta); ta.select();
+    document.execCommand('copy'); document.body.removeChild(ta);
+    showToast();
+  }
+
+  function showToast() {
+    toast.classList.add('show');
+    setTimeout(function() { toast.classList.remove('show'); }, 2500);
+  }
+
+  document.getElementById('resetBtn').addEventListener('click', function() {
+    currentStats = null; currentRows = null;
+    fileInput.value = ''; dateInput.value = '';
+    fileNameEl.textContent = '';
+    fileChip.classList.add('hidden');
+    resultsCard.classList.add('hidden');
+    slotCard.classList.add('hidden');
+    detailsCard.classList.add('hidden');
+    hideError();
+    window.scrollTo({ top:0, behavior:'smooth' });
+  });
+
+
+  function downloadCardAsImage(cardId, filename) {
+    var card = document.getElementById(cardId);
+    card.classList.add('capturing');
+    html2canvas(card, {
+      backgroundColor: '#161B27',
+      scale: 2,
+      useCORS: true,
+      logging: false
+    }).then(function(canvas) {
+      card.classList.remove('capturing');
+      var link = document.createElement('a');
+      link.download = filename;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+      showToast2('&#128247; Image downloaded!');
+    }).catch(function() {
+      card.classList.remove('capturing');
+    });
+  }
+
+  document.getElementById('dlMsg1').addEventListener('click', function() {
+    var d = formatDateLabel(dateInput.value) || 'report';
+    downloadCardAsImage('resultsCard', 'BAGIC_Daily_Stats_' + d.replace(/ /g,'_') + '.png');
+  });
+
+  document.getElementById('dlMsg2').addEventListener('click', function() {
+    var d = formatDateLabel(dateInput.value) || 'report';
+    downloadCardAsImage('slotCard', 'BAGIC_Shiftwise_Stats_' + d.replace(/ /g,'_') + '.png');
+  });
+
+  var toast2 = null;
+  function showToast2(msg) {
+    toast.innerHTML = msg;
+    toast.classList.add('show');
+    setTimeout(function() { toast.classList.remove('show'); toast.innerHTML = '&#10003; Copied! Paste it into Slack.'; }, 2500);
+  }
+  function showError(msg) { uploadError.textContent = msg; uploadError.classList.remove('hidden'); }
+  function hideError() { uploadError.classList.add('hidden'); }
+</script>
+</body>
+</html>
